@@ -33,9 +33,9 @@ public class APIToolkitFilter implements Filter {
     private Boolean debug;
     @Value("${apitoolkit.redactHeaders:}")
     private String[] redactHeaders;
-    @Value("${apitoolkit.redactRequestBody:")
+    @Value("${apitoolkit.redactRequestBody:}")
     private String[] redactRequestBody;
-    @Value("${apitoolkit.redactResponseBody:")
+    @Value("${apitoolkit.redactResponseBody:}")
     private String[] redactResponseBody;
     @Value("${apitoolkit.captureRequest_body:false}")
     private Boolean captureRequestBody;
