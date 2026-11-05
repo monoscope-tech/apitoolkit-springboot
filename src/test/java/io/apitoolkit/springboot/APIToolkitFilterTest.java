@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.mockito.Mock;
 import org.springframework.http.MediaType;
@@ -44,7 +44,7 @@ public class APIToolkitFilterTest {
     @Mock
     private FilterChain filterChain;
 
-    @Before
+    @BeforeEach
     public void setup() {
         HashMap<String, String> fConf = new HashMap<>();
         fConf.put("apitoolkit.debug", "false");
