@@ -63,6 +63,7 @@ public class ObserveRequest {
                     if (span != null) {
                         span.recordException(e);
                     }
+                    ctx.setAttribute("apitoolkit_error", e);
                     responseInterceptor.process(null, ctx);
                     throw e;
                 }
