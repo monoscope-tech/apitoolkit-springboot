@@ -70,7 +70,7 @@
     <dependency>
       <groupId>jakarta.servlet</groupId>
       <artifactId>jakarta.servlet-api</artifactId>
-      <version>5.0.0</version>
+      <version>6.0.0</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -95,6 +95,11 @@
     <dependency>
       <groupId>io.opentelemetry</groupId>
       <artifactId>opentelemetry-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-sdk-testing</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.jayway.jsonpath</groupId>

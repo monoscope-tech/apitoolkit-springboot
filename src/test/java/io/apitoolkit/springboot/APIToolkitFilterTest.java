@@ -48,7 +48,7 @@ public class APIToolkitFilterTest {
     public void setup() {
         HashMap<String, String> fConf = new HashMap<>();
         fConf.put("apitoolkit.debug", "false");
-        fConf.put("apitoolkit.redactHeaders", "cookies,authorization,x-api");
+        fConf.put("apitoolkit.redactHeaders", "X-Api-Key");
         fConf.put("apitoolkit.redactRequestBody", "$.password,$.email");
         fConf.put("apitoolkit.redactResponseBody", "$.password,$.email");
         fConf.put("apitoolkit.captureRequestBody", "true");

@@ -1,6 +1,7 @@
 package io.apitoolkit.springboot;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -8,22 +9,21 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.Test;
+
+import io.opentelemetry.api.trace.Span;
 
 public class UtilsTest {
 
     @Test
     public void testRedactHeaders() {
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put("Authorization", "Bearer token");
-        headers.put("Content-Type", "application/json");
-        HashMap<String, String> result = new HashMap<>();
-        List<String> redactedHeaders = Arrays.asList("Authorization");
-        for (Map.Entry<String, String> header : headers.entrySet()) {
-            result.put(header.getKey(), Utils.redactHeader(header.getKey(), header.getValue(), redactedHeaders));
-        }
-        assertEquals("[CLIENT_REDACTED]", result.get("Authorization"));
-        assertEquals("application/json", result.get("Content-Type"));
+        List<String> redactedHeaders = Arrays.asList("X-Api-Key", " x-session");
+        assertEquals("[CLIENT_REDACTED]", Utils.redactHeader("X-Api-Key", "key", redactedHeaders));
+        assertEquals("[CLIENT_REDACTED]", Utils.redactHeader("x-api-key", "key", redactedHeaders));
+        assertEquals("[CLIENT_REDACTED]", Utils.redactHeader("X-Session", "sid", redactedHeaders));
+        assertEquals("application/json", Utils.redactHeader("Content-Type", "application/json", redactedHeaders));
     }
 
     @Test
@@ -53,20 +53,29 @@ public class UtilsTest {
     }
 
     @Test
-    public void testRedactHeadersEmptyRedactedHeaders() {
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put("Authorization", "Bearer token");
-        headers.put("Content-Type", "application/json");
-
-        List<String> redactedHeaders = Arrays.asList();
-
-        HashMap<String, String> result = new HashMap<>();
-        for (Map.Entry<String, String> header : headers.entrySet()) {
-            result.put(header.getKey(), Utils.redactHeader(header.getKey(), header.getValue(), redactedHeaders));
+    public void testRedactsCredentialHeadersByDefault() {
+        for (List<String> configured : Arrays.asList(Arrays.<String>asList(), null)) {
+            for (String header : Arrays.asList("Authorization", "cookie", "Set-Cookie", "PROXY-AUTHORIZATION")) {
+                assertEquals("[CLIENT_REDACTED]", Utils.redactHeader(header, "secret", configured));
+            }
+            assertEquals("application/json", Utils.redactHeader("Content-Type", "application/json", configured));
         }
+    }
 
-        assertEquals("Bearer token", result.get("Authorization"));
-        assertEquals("application/json", result.get("Content-Type"));
+    @Test
+    public void testKeepsRequestDetailsWhenResponseHasNoBody() {
+        Span span = mock(Span.class);
+        HashMap<String, String> reqHeaders = new HashMap<>();
+        reqHeaders.put("Authorization", "Bearer abc");
+        Utils.setApitoolkitAttributesAndEndSpan(span, "example.com", 204, new HashMap<String, String>(),
+                new HashMap<String, String>(), reqHeaders, new HashMap<String, String>(), "DELETE", "/items/1",
+                "", "/items/{id}", "{}".getBytes(StandardCharsets.UTF_8), null,
+                new ArrayList<Map<String, Object>>(), new HashMap<String, Object>(), "JavaApacheOutgoing", null);
+        verify(span).setAttribute("net.host.name", "example.com");
+        verify(span).setAttribute("http.request.method", "DELETE");
+        verify(span).setAttribute("http.response.body", "");
+        verify(span).setAttribute("http.request.header.Authorization", "[CLIENT_REDACTED]");
+        verify(span).end();
     }
 
     @Test
