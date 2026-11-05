@@ -7,7 +7,7 @@
 
   <groupId>io.apitoolkit.springboot</groupId>
   <artifactId>apitoolkit-springboot</artifactId>
-  <version>2.0.9</version>
+  <version>2.0.10</version>
 
   <name>apitoolkit-springboot</name>
   <description>APItoolkit SDK for spring boot</description>
@@ -68,15 +68,9 @@
   </distributionManagement>
   <dependencies>
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.11</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>jakarta.servlet</groupId>
       <artifactId>jakarta.servlet-api</artifactId>
-      <version>5.0.0</version>
+      <version>6.0.0</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -103,6 +97,11 @@
       <artifactId>opentelemetry-api</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-sdk-testing</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>com.jayway.jsonpath</groupId>
       <artifactId>json-path</artifactId>
       <version>2.9.0</version>
@@ -114,15 +113,10 @@
       <version>5.12.0</version>
     </dependency>
     <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-junit-jupiter</artifactId>
-      <scope>test</scope>
-      <version>4.8.1</version>
-    </dependency>
-    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <version>3.3.0</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
@@ -185,7 +179,7 @@
         <extensions>true</extensions>
         <configuration>
           <autoPublish>true</autoPublish>
-          <deploymentName>apitoolkit-springboot-2.0.8</deploymentName>
+          <deploymentName>apitoolkit-springboot-2.0.10</deploymentName>
           <publishingServerId>central</publishingServerId>
           <tokenAuth>true</tokenAuth>
         </configuration>

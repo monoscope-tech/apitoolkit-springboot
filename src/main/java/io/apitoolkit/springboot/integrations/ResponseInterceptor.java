@@ -54,7 +54,11 @@ public class ResponseInterceptor implements HttpResponseInterceptor {
     @Override
     public void process(HttpResponse response, HttpContext context) {
         try {
-            Span span = (Span) context.getAttribute("span");
+            // Taken once, so a failed request that already reached here is not reported twice.
+            Span span = (Span) context.removeAttribute("span");
+            if (span == null) {
+                return;
+            }
             String host = (String) context.getAttribute("apitoolkit_host");
 
             byte[] requestBodyStr = (byte[]) context.getAttribute("apitoolkit_request_body");
@@ -63,23 +67,25 @@ public class ResponseInterceptor implements HttpResponseInterceptor {
             HashMap<String, String> requestHeaders = (HashMap<String, String>) context
                     .getAttribute("apitoolkit_request_headers");
 
-            HashMap<String, String> responseHeaders = new HashMap<>();
-            for (org.apache.http.Header header : response.getAllHeaders()) {
-                responseHeaders.put(header.getName(), header.getValue());
-            }
-
             String method = (String) context.getAttribute("apitoolkit_method");
             String rawUrl = (String) context.getAttribute("apitoolkit_raw_url");
             HashMap<String, String> queryParams = (HashMap<String, String>) context
                     .getAttribute("apitoolkit_query_params");
 
-            int statusCode = response.getStatusLine().getStatusCode();
-            HttpEntity entity = response.getEntity();
+            // response is null when the request failed before one arrived.
+            HashMap<String, String> responseHeaders = new HashMap<>();
+            int statusCode = 0;
             byte[] responseBody = null;
-            if (entity != null) {
-                responseBody = EntityUtils.toByteArray(entity);
-                response.setEntity(new BufferedHttpEntity(entity, responseBody));
-
+            if (response != null) {
+                for (org.apache.http.Header header : response.getAllHeaders()) {
+                    responseHeaders.put(header.getName(), header.getValue());
+                }
+                statusCode = response.getStatusLine().getStatusCode();
+                HttpEntity entity = response.getEntity();
+                if (entity != null) {
+                    responseBody = EntityUtils.toByteArray(entity);
+                    response.setEntity(new BufferedHttpEntity(entity, responseBody));
+                }
             }
 
             HashMap<String, String> pathParams = new HashMap<>();

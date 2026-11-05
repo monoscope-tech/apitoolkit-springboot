@@ -2,6 +2,7 @@ package io.apitoolkit.springboot;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,8 @@ import io.opentelemetry.api.trace.Span;
 public class Utils {
 
     private static final Gson GSON = new Gson();
+    private static final List<String> DEFAULT_REDACTED_HEADERS = Arrays.asList(
+            "authorization", "cookie", "set-cookie", "proxy-authorization");
 
     public static void setApitoolkitAttributesAndEndSpan(
             Span span,
@@ -91,13 +94,22 @@ public class Utils {
     }
 
     public static String redactHeader(String header, String headerVal, List<String> redactHeaders) {
-        if (redactHeaders.contains(header) || redactHeaders.contains(header.toLowerCase())) {
-            return "[CLIENT_REDACTED]";
+        List<String> names = new ArrayList<>(DEFAULT_REDACTED_HEADERS);
+        if (redactHeaders != null) {
+            names.addAll(redactHeaders);
+        }
+        for (String name : names) {
+            if (name.trim().equalsIgnoreCase(header)) {
+                return "[CLIENT_REDACTED]";
+            }
         }
         return headerVal;
     }
 
     public static byte[] redactFields(byte[] data, List<String> jsonPaths, Boolean debug) {
+        if (data == null) {
+            return new byte[0];
+        }
         if (jsonPaths == null || jsonPaths.isEmpty() || data.length == 0) {
             return data;
         }

@@ -31,7 +31,7 @@ To install the SDK, kindly add the following dependency to your `pom.xml` file w
 <dependency>
     <groupId>io.apitoolkit.springboot</groupId>
     <artifactId>apitoolkit-springboot</artifactId>
-    <version>2.0.9</version>
+    <version>2.0.10</version>
 </dependency>
 ```
 

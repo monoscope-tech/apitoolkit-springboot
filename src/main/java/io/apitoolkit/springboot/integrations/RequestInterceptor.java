@@ -1,17 +1,17 @@
 package io.apitoolkit.springboot.integrations;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 
 import org.apache.http.HttpEntityEnclosingRequest;
+import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.NameValuePair;
 import org.apache.http.ParseException;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
@@ -45,11 +45,9 @@ public class RequestInterceptor implements HttpRequestInterceptor {
 
         }
 
-        try {
-            String host = new URI(uri).getHost();
-            context.setAttribute("host", host);
-        } catch (URISyntaxException e) {
-        }
+        // The request line is already relative here, so the host has to come from the route target.
+        HttpHost target = HttpClientContext.adapt(context).getTargetHost();
+        context.setAttribute("apitoolkit_host", target != null ? target.getHostName() : null);
 
         HashMap<String, String> requestHeaders = new HashMap<>();
         for (org.apache.http.Header header : request.getAllHeaders()) {
