@@ -37,9 +37,10 @@ public class APIToolkitFilter implements Filter {
     private String[] redactRequestBody;
     @Value("${apitoolkit.redactResponseBody:}")
     private String[] redactResponseBody;
-    @Value("${apitoolkit.captureRequest_body:false}")
+    // The underscore names are what earlier versions read; they still work.
+    @Value("${apitoolkit.captureRequestBody:${apitoolkit.captureRequest_body:false}}")
     private Boolean captureRequestBody;
-    @Value("${apitoolkit.captureResponse_body:false}")
+    @Value("${apitoolkit.captureResponseBody:${apitoolkit.captureResponse_body:false}}")
     private Boolean captureResponseBody;
     @Value("${apitoolkit.serviceName:}")
     private String serviceName;

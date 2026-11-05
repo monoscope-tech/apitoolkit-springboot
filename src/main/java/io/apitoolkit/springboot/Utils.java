@@ -1,5 +1,7 @@
 package io.apitoolkit.springboot;
 
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.StringJoiner;
 
 import com.google.gson.Gson;
 import com.jayway.jsonpath.DocumentContext;
@@ -18,8 +21,14 @@ import io.opentelemetry.api.trace.Span;
 public class Utils {
 
     private static final Gson GSON = new Gson();
+    private static final String REDACTED = "[CLIENT_REDACTED]";
+    private static final String REDACTED_ENCODED = URLEncoder.encode(REDACTED, StandardCharsets.UTF_8);
     private static final List<String> DEFAULT_REDACTED_HEADERS = Arrays.asList(
             "authorization", "cookie", "set-cookie", "proxy-authorization");
+    // Always redacted from query strings, in addition to the configured redactHeaders.
+    private static final List<String> DEFAULT_REDACTED_QUERY_PARAMS = Arrays.asList(
+            "api_key", "apikey", "access_token", "token", "password", "secret", "client_secret", "signature",
+            "sig", "auth");
 
     public static void setApitoolkitAttributesAndEndSpan(
             Span span,
@@ -61,10 +70,10 @@ public class Utils {
             span.setAttribute("net.host.name", host);
             span.setAttribute("apitoolkit.msg_id", msgId);
             span.setAttribute("http.route", urlPath);
-            span.setAttribute("http.target", rawUrl);
+            span.setAttribute("http.target", redactQueryString(rawUrl, redactHeaders));
             span.setAttribute("http.request.method", method);
             span.setAttribute("http.response.status_code", statusCode);
-            span.setAttribute("http.request.query_params", GSON.toJson(queryParams));
+            span.setAttribute("http.request.query_params", GSON.toJson(redactQueryParams(queryParams, redactHeaders)));
             span.setAttribute("http.request.path_params", GSON.toJson(pathParams));
             span.setAttribute("apitoolkit.sdk_type", sdkType);
             span.setAttribute("apitoolkit.parent_id", Optional.ofNullable(parentId).orElse(""));
@@ -93,17 +102,53 @@ public class Utils {
         }
     }
 
-    public static String redactHeader(String header, String headerVal, List<String> redactHeaders) {
-        List<String> names = new ArrayList<>(DEFAULT_REDACTED_HEADERS);
-        if (redactHeaders != null) {
-            names.addAll(redactHeaders);
+    private static boolean isRedacted(String name, List<String> defaults, List<String> configured) {
+        List<String> names = new ArrayList<>(defaults);
+        if (configured != null) {
+            names.addAll(configured);
         }
-        for (String name : names) {
-            if (name.trim().equalsIgnoreCase(header)) {
-                return "[CLIENT_REDACTED]";
+        for (String n : names) {
+            if (n.trim().equalsIgnoreCase(name)) {
+                return true;
             }
         }
-        return headerVal;
+        return false;
+    }
+
+    public static String redactHeader(String header, String headerVal, List<String> redactHeaders) {
+        return isRedacted(header, DEFAULT_REDACTED_HEADERS, redactHeaders) ? REDACTED : headerVal;
+    }
+
+    public static Map<String, String> redactQueryParams(Map<String, String> params, List<String> redactNames) {
+        if (params == null) {
+            return null;
+        }
+        Map<String, String> redacted = new HashMap<>();
+        params.forEach((k, v) -> redacted.put(k, isRedacted(k, DEFAULT_REDACTED_QUERY_PARAMS, redactNames) ? REDACTED : v));
+        return redacted;
+    }
+
+    // Rewrites only the matching values, so the rest of the URL stays exactly as sent.
+    public static String redactQueryString(String url, List<String> redactNames) {
+        int q = url == null ? -1 : url.indexOf('?');
+        if (q < 0) {
+            return url;
+        }
+        StringJoiner pairs = new StringJoiner("&");
+        for (String pair : url.substring(q + 1).split("&", -1)) {
+            int eq = pair.indexOf('=');
+            boolean redact = eq >= 0 && isRedacted(decode(pair.substring(0, eq)), DEFAULT_REDACTED_QUERY_PARAMS, redactNames);
+            pairs.add(redact ? pair.substring(0, eq + 1) + REDACTED_ENCODED : pair);
+        }
+        return url.substring(0, q + 1) + pairs;
+    }
+
+    private static String decode(String s) {
+        try {
+            return URLDecoder.decode(s, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return s;
+        }
     }
 
     public static byte[] redactFields(byte[] data, List<String> jsonPaths, Boolean debug) {

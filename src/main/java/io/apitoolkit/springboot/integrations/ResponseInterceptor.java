@@ -15,6 +15,7 @@ import org.apache.http.entity.HttpEntityWrapper;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 
+import io.apitoolkit.springboot.APErrors;
 import io.apitoolkit.springboot.Utils;
 import io.opentelemetry.api.trace.Span;
 import jakarta.servlet.http.HttpServletRequest;
@@ -103,6 +104,10 @@ public class ResponseInterceptor implements HttpResponseInterceptor {
             outConfig.put("redactResponseBody", this.redactResponseBody);
 
             List<Map<String, Object>> errors = new ArrayList<>();
+            Throwable error = (Throwable) context.removeAttribute("apitoolkit_error");
+            if (error != null) {
+                errors.add(APErrors.buildError(error));
+            }
 
             Utils.setApitoolkitAttributesAndEndSpan(
                     span,

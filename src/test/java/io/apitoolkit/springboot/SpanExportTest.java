@@ -2,24 +2,32 @@ package io.apitoolkit.springboot;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -56,13 +64,7 @@ public class SpanExportTest {
     }
 
     private static String attr(SpanData span, String key) {
-        // AttributeKey.stringKey is a static interface method, which -source 7 rejects.
-        for (Map.Entry<AttributeKey<?>, Object> e : span.getAttributes().asMap().entrySet()) {
-            if (e.getKey().getKey().equals(key)) {
-                return String.valueOf(e.getValue());
-            }
-        }
-        return null;
+        return span.getAttributes().get(AttributeKey.stringKey(key));
     }
 
     private static SpanData onlySpan() {
@@ -91,6 +93,45 @@ public class SpanExportTest {
     }
 
     @Test
+    public void testFilterRedactsQueryParams() throws Exception {
+        HashMap<String, String> conf = new HashMap<>();
+        conf.put("apitoolkit.redactHeaders", "X-Session");
+        standaloneSetup(new TestController())
+                .addFilter(new APIToolkitFilter(), "APIToolkitFilter", conf, null, "*")
+                .build()
+                .perform(get("/login?API_KEY=k&page=1&x-session=s&sig"));
+
+        SpanData span = onlySpan();
+        assertEquals("/login?API_KEY=%5BCLIENT_REDACTED%5D&page=1&x-session=%5BCLIENT_REDACTED%5D&sig",
+                attr(span, "http.target"));
+        String params = attr(span, "http.request.query_params");
+        assertTrue(params.contains("\"API_KEY\":\"[CLIENT_REDACTED]\""), params);
+        assertTrue(params.contains("\"x-session\":\"[CLIENT_REDACTED]\""), params);
+        assertTrue(params.contains("\"page\":\"1\""), params);
+    }
+
+    // Set the way a Spring app does, through properties, not filter init params.
+    @ParameterizedTest
+    @ValueSource(strings = { "captureRequestBody", "captureRequest_body" })
+    public void testCaptureBodyFromSpringProperties(String requestProp) {
+        String responseProp = requestProp.replace("Request", "Response");
+        new ApplicationContextRunner()
+                .withPropertyValues("apitoolkit." + requestProp + "=true", "apitoolkit." + responseProp + "=true")
+                .withBean(APIToolkitFilter.class)
+                .run(ctx -> {
+                    standaloneSetup(new TestController())
+                            .addFilter(ctx.getBean(APIToolkitFilter.class), "APIToolkitFilter",
+                                    new HashMap<String, String>(), null, "*")
+                            .build()
+                            .perform(post("/echo").content("hello"));
+                    SpanData span = onlySpan();
+                    String body = Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8));
+                    assertEquals(body, attr(span, "http.request.body"));
+                    assertEquals(body, attr(span, "http.response.body"));
+                });
+    }
+
+    @Test
     public void testOutgoingRequestKeepsDetailsAndRedactsHeaders() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", new HttpHandler() {
@@ -102,7 +143,7 @@ public class SpanExportTest {
         });
         server.start();
         try (CloseableHttpClient client = new ObserveRequest(Arrays.asList("X-Api-Key")).createHttpClient(parent())) {
-            HttpGet get = new HttpGet("http://127.0.0.1:" + server.getAddress().getPort() + "/items?id=1");
+            HttpGet get = new HttpGet("http://127.0.0.1:" + server.getAddress().getPort() + "/items?id=1&token=t");
             get.addHeader("Authorization", "Bearer abc");
             get.addHeader("x-api-key", "k");
             client.execute(get).close();
@@ -113,7 +154,10 @@ public class SpanExportTest {
         SpanData span = onlySpan();
         assertEquals("127.0.0.1", attr(span, "net.host.name"));
         assertEquals("GET", attr(span, "http.request.method"));
-        assertEquals("/items?id=1", attr(span, "http.target"));
+        assertEquals("/items?id=1&token=%5BCLIENT_REDACTED%5D", attr(span, "http.target"));
+        String params = attr(span, "http.request.query_params");
+        assertTrue(params.contains("\"token\":\"[CLIENT_REDACTED]\""), params);
+        assertTrue(params.contains("\"id\":\"1\""), params);
         assertEquals(REDACTED, attr(span, "http.request.header.Authorization"));
         assertEquals(REDACTED, attr(span, "http.request.header.x-api-key"));
         // The JDK server sends the name as "Set-cookie".
@@ -141,6 +185,8 @@ public class SpanExportTest {
         assertEquals("GET", attr(span, "http.request.method"));
         assertEquals("/items", attr(span, "http.target"));
         assertEquals(REDACTED, attr(span, "http.request.header.Authorization"));
+        String errors = attr(span, "apitoolkit.errors");
+        assertTrue(errors.contains("java.net.ConnectException"), errors);
     }
 
     private static MockHttpServletRequest parent() {
@@ -158,6 +204,12 @@ public class SpanExportTest {
             response.addHeader("Set-Cookie", "sid=2");
             response.addHeader("X-Result", "ok");
             return "ok";
+        }
+
+        @PostMapping("/echo")
+        @ResponseBody
+        public String echo(@RequestBody String body) {
+            return body;
         }
     }
 }
